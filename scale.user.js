@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SEAKS3011D scale input
 // @namespace    https://github.com/mitch-radicaproducts-com/smart-inventory-scale
-// @version      1.0.0
+// @version      1.1.0
 // @description  Type prints from the SEAKS3011D RS-232 adapter into the focused field
 // @match        https://*/*
 // @match        http://localhost/*
@@ -64,7 +64,7 @@
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Connect scale";
-  button.title = "Open the SEAKS3011D adapter at 9600 8N1. Then click a field and press P.";
+  button.title = "Reopens the saved adapter. The first time on a site, Chrome still asks you to choose it.";
   button.style.cssText = [
     "position:fixed",
     "right:16px",
@@ -84,6 +84,8 @@
   let reader = null;
   let reading = false;
   let generation = 0;
+  let paused = false;
+  let opening = null;
   const feed = createScaleFeed();
   const decoder = new TextDecoder();
 
@@ -152,6 +154,7 @@
   }
 
   async function disconnect() {
+    paused = true;
     generation += 1;
     reading = false;
     const current = reader;
@@ -165,23 +168,58 @@
     setButton("Connect scale", false);
   }
 
+  function openPort(nextPort) {
+    if (port || paused) return Promise.resolve();
+    if (opening) return opening;
+    opening = (async () => {
+      try {
+        await nextPort.open({ baudRate: 9600, dataBits: 8, stopBits: 1, parity: "none", flowControl: "none" });
+        if (paused) {
+          await nextPort.close();
+          return;
+        }
+        port = nextPort;
+        generation += 1;
+        reader = port.readable.getReader();
+        setButton("Scale on", true);
+        readLoop(generation);
+      } finally {
+        opening = null;
+      }
+    })();
+    return opening;
+  }
+
+  async function useRememberedPort() {
+    if (port || paused) return false;
+    const ports = await serial.getPorts();
+    if (ports.length !== 1) return false;
+    await openPort(ports[0]);
+    return true;
+  }
+
   async function connect() {
-    const nextPort = await serial.requestPort();
-    await nextPort.open({ baudRate: 9600, dataBits: 8, stopBits: 1, parity: "none", flowControl: "none" });
-    port = nextPort;
-    generation += 1;
-    reader = port.readable.getReader();
-    setButton("Scale on", true);
-    readLoop(generation);
+    paused = false;
+    if (await useRememberedPort()) return;
+    await openPort(await serial.requestPort());
+  }
+
+  function report(error) {
+    if (error?.name === "NotFoundError") setButton("Connect scale", false);
+    else setButton(error?.message || "Scale failed", false);
   }
 
   button.addEventListener("click", () => {
     const action = port ? disconnect() : connect();
-    action.catch((error) => {
-      if (error.name === "NotFoundError") setButton("Connect scale", false);
-      else setButton(error.message || "Scale failed", false);
-    });
+    action.catch(report);
   });
+
+  serial.addEventListener("connect", (event) => {
+    if (port || paused) return;
+    openPort(event.target).catch(() => setButton("Connect scale", false));
+  });
+
+  useRememberedPort().catch(() => setButton("Connect scale", false));
 
   document.documentElement.append(button);
 })();

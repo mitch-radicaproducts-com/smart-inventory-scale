@@ -48,4 +48,5 @@ test("the userscript carries the same feed", () => {
   assert.match(script, /@grant\s+none/);
   assert.match(script, /@noframes/);
   assert.match(script, /navigator\.serial/);
+  assert.match(script, /getPorts/);
 });

@@ -26,6 +26,6 @@ A probe of every printable character and the usual read commands returned no byt
 
 ## Tampermonkey
 
-`scale.user.js` types each print into the focused field, then sends Enter when the scale sends a carriage return. Install it in Tampermonkey on Chrome. Open an https page, click **Connect scale**, choose the USB serial adapter, click the field you want, and press P on the scale.
+`scale.user.js` types each print into the focused field, then sends Enter when the scale sends a carriage return. Install it in Tampermonkey on Chrome. The first time on a website, click **Connect scale** and choose the adapter. After that, the script reopens that saved adapter by itself when the page loads. Click the field you want, then press P on the scale.
 
-The permission belongs to that website. Connecting on one site does not cover another. The script runs on the top-level Chrome tab. It does not run inside an Airtable custom-extension frame. Firefox has no Web Serial API, so the script does nothing there.
+Chrome will not skip the chooser until the site has been allowed once. That permission belongs to the website. Connecting on one site does not cover another. The script runs on the top-level Chrome tab. It does not run inside an Airtable custom-extension frame. Firefox has no Web Serial API, so the script does nothing there.
