@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SEAKS3011D scale input
 // @namespace    https://github.com/mitch-radicaproducts-com/smart-inventory-scale
-// @version      1.2.0
+// @version      1.3.0
 // @description  Type prints from the SEAKS3011D RS-232 adapter into the focused field
 // @match        https://*/*
 // @match        http://localhost/*
@@ -29,59 +29,105 @@
   function createScaleFeed() {
     let pending = "";
 
-    function takeEnter() {
+    function takeEnd() {
       const actions = [];
       while (pending.startsWith("\r") || pending.startsWith("\n")) {
         const first = pending[0];
         pending = pending.slice(1);
         if (first === "\r" && pending.startsWith("\n")) pending = pending.slice(1);
         if (first === "\n" && pending.startsWith("\r")) pending = pending.slice(1);
-        actions.push({ type: "enter" });
+        actions.push({ type: "end" });
       }
       return actions;
     }
 
+    function emitText(actions, raw) {
+      const text = raw.trim();
+      if (text) actions.push({ type: "text", text });
+    }
+
     return function push(chunk) {
       pending += chunk;
-      const actions = takeEnter();
+      const actions = takeEnd();
       while (pending.length) {
         const cr = pending.indexOf("\r");
         const lf = pending.indexOf("\n");
         const cut = cr >= 0 && lf >= 0 ? Math.min(cr, lf) : Math.max(cr, lf);
         if (cut === -1) {
-          const text = pending.replace(/[ \t]+$/g, "");
-          if (text) actions.push({ type: "text", text });
+          emitText(actions, pending);
           pending = "";
           break;
         }
-        if (cut > 0) {
-          const text = pending.slice(0, cut).replace(/[ \t]+$/g, "");
-          if (text) actions.push({ type: "text", text });
-        }
+        if (cut > 0) emitText(actions, pending.slice(0, cut));
         pending = pending.slice(cut);
-        actions.push(...takeEnter());
+        actions.push(...takeEnd());
       }
       return actions;
     };
   }
+
+  const panel = document.createElement("div");
+  panel.style.cssText = [
+    "position:fixed",
+    "right:16px",
+    "bottom:16px",
+    "z-index:2147483647",
+    "display:grid",
+    "gap:6px",
+    "padding:10px 12px",
+    "border:1px solid #1c1914",
+    "border-radius:10px",
+    "background:#fffdf8",
+    "color:#1c1914",
+    "font:13px/1.2 system-ui,sans-serif",
+    "box-shadow:0 1px 4px rgba(28,25,20,0.18)",
+  ].join(";");
 
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Connect scale";
   button.title = "Reopens the saved adapter. The first time on a site, Chrome still asks you to choose it.";
   button.style.cssText = [
-    "position:fixed",
-    "right:16px",
-    "bottom:16px",
-    "z-index:2147483647",
     "padding:8px 12px",
     "border:1px solid #1c1914",
     "border-radius:8px",
     "background:#fffdf8",
     "color:#1c1914",
-    "font:14px/1.2 system-ui,sans-serif",
+    "font:inherit",
     "cursor:pointer",
   ].join(";");
+
+  function savedAfter() {
+    try {
+      return JSON.parse(localStorage.getItem("seaks3011d-after") || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function rememberAfter() {
+    localStorage.setItem("seaks3011d-after", JSON.stringify({
+      tab: tabBox.checked,
+      enter: enterBox.checked,
+    }));
+  }
+
+  function addChoice(name, label, checked) {
+    const row = document.createElement("label");
+    row.style.cssText = "display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = checked;
+    box.addEventListener("change", rememberAfter);
+    row.append(box, document.createTextNode(label));
+    panel.append(row);
+    return box;
+  }
+
+  const remembered = savedAfter();
+  panel.append(button);
+  const tabBox = addChoice("tab", "Send Tab After", remembered.tab === true);
+  const enterBox = addChoice("enter", "Send Enter After", remembered.enter === true);
   button.addEventListener("mousedown", (event) => event.preventDefault());
 
   let port = null;
@@ -101,7 +147,7 @@
 
   function insertText(text) {
     const el = document.activeElement;
-    if (!el || el === document.body || el === document.documentElement || el === button) return;
+    if (!el || el === document.body || el === document.documentElement || panel.contains(el)) return;
     if (el.isContentEditable) {
       document.execCommand("insertText", false, text);
       return;
@@ -121,19 +167,36 @@
     el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
   }
 
-  function pressEnter() {
+  function pressKey(key) {
     const el = document.activeElement;
-    if (!el || el === button) return;
-    const init = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    if (!el || panel.contains(el)) return;
+    const init = { key, code: key, bubbles: true, cancelable: true };
     el.dispatchEvent(new KeyboardEvent("keydown", init));
     el.dispatchEvent(new KeyboardEvent("keyup", init));
   }
 
+  let settleTimer = null;
+  let waitingToFinish = false;
+
+  function sendAfter() {
+    waitingToFinish = false;
+    if (tabBox.checked) pressKey("Tab");
+    if (enterBox.checked) pressKey("Enter");
+  }
+
   function applyActions(actions) {
     for (const action of actions) {
-      if (action.type === "text") insertText(action.text);
-      else pressEnter();
+      if (action.type === "text") {
+        insertText(action.text);
+        waitingToFinish = true;
+      } else if (waitingToFinish) {
+        clearTimeout(settleTimer);
+        sendAfter();
+      }
     }
+    if (!waitingToFinish) return;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(sendAfter, 150);
   }
 
   async function readLoop(token) {
@@ -225,5 +288,5 @@
 
   useRememberedPort().catch(() => setButton("Connect scale", false));
 
-  document.documentElement.append(button);
+  document.documentElement.append(panel);
 })();
