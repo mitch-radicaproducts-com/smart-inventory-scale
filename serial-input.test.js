@@ -3,6 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createScaleFeed, isTextBytes } from "./serial-input.js";
 
+test("trailing spaces on a print are not typed", () => {
+  const feed = createScaleFeed();
+  assert.deepEqual(feed("0.0000kg  \r\n0.0000kg  "), [
+    { type: "text", text: "0.0000kg" },
+    { type: "enter" },
+    { type: "text", text: "0.0000kg" },
+  ]);
+});
+
 test("a print types the number and one Enter", () => {
   const feed = createScaleFeed();
   assert.deepEqual(feed("12.500\r\n"), [

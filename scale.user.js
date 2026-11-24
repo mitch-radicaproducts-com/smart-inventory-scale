@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SEAKS3011D scale input
 // @namespace    https://github.com/mitch-radicaproducts-com/smart-inventory-scale
-// @version      1.1.0
+// @version      1.2.0
 // @description  Type prints from the SEAKS3011D RS-232 adapter into the focused field
 // @match        https://*/*
 // @match        http://localhost/*
@@ -49,11 +49,15 @@
         const lf = pending.indexOf("\n");
         const cut = cr >= 0 && lf >= 0 ? Math.min(cr, lf) : Math.max(cr, lf);
         if (cut === -1) {
-          actions.push({ type: "text", text: pending });
+          const text = pending.replace(/[ \t]+$/g, "");
+          if (text) actions.push({ type: "text", text });
           pending = "";
           break;
         }
-        if (cut > 0) actions.push({ type: "text", text: pending.slice(0, cut) });
+        if (cut > 0) {
+          const text = pending.slice(0, cut).replace(/[ \t]+$/g, "");
+          if (text) actions.push({ type: "text", text });
+        }
         pending = pending.slice(cut);
         actions.push(...takeEnter());
       }
