@@ -1,0 +1,228 @@
+:root {
+  color-scheme: light;
+  --paper: #ebe4d6;
+  --ink: #1c1914;
+  --muted: #5f584c;
+  --line: #d4cbb8;
+  --panel: #fffdf8;
+  --teal: #0d5c56;
+  --teal-ink: #f3fffc;
+  --warn: #8c3412;
+  --shadow: 0 1px 0 rgba(28, 25, 20, 0.06);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 4px solid var(--teal);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0.15rem 0 0;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.status {
+  margin: 0;
+  max-width: 28rem;
+  text-align: right;
+  color: var(--muted);
+}
+
+main {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem 2rem;
+}
+
+.bench, .log-panel {
+  grid-column: 1 / -1;
+}
+
+.bench {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.readout, .panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.readout { padding: 1rem 1.1rem 0.9rem; }
+
+.label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.value {
+  margin: 0.35rem 0 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.pill:empty { display: none; }
+
+.pill {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #e7f3f1;
+  color: var(--teal);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pill.warn {
+  background: #f8e6dc;
+  color: var(--warn);
+}
+
+.panel { padding: 1rem 1.1rem 1.1rem; }
+
+.fields, .actions, .command {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.fields label, .command label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.grow { flex: 1 1 12rem; }
+
+select, input, button {
+  font: inherit;
+  color: var(--ink);
+}
+
+select, input {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+input { width: 100%; }
+
+.check {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  min-height: 2.5rem;
+}
+
+.actions, .command { margin-top: 0.85rem; }
+
+button {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--teal);
+  color: var(--teal-ink);
+  cursor: pointer;
+}
+
+#disconnect, #sample, #clear, #reconnect {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+button:disabled,
+#disconnect:disabled,
+#reconnect:disabled,
+#sample:disabled,
+#clear:disabled {
+  background: #e6e0d4;
+  border-color: transparent;
+  color: #8a8376;
+  cursor: not-allowed;
+}
+
+kbd {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #f7f3ea;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.setup ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.setup li { margin: 0.45rem 0; }
+
+.note, .setup li { color: var(--muted); line-height: 1.45; }
+
+.log {
+  min-height: 12rem;
+  max-height: 22rem;
+  margin: 0;
+  padding: 0.75rem 0.9rem 0.75rem 2rem;
+  overflow: auto;
+  background: #201c17;
+  color: #f4ecdf;
+  border-radius: 10px;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.log li.note { color: #d7c4a4; }
+
+@media (max-width: 800px) {
+  .top, main { padding-left: 1rem; padding-right: 1rem; }
+  .top, .bench, main { display: grid; grid-template-columns: 1fr; }
+  .status { text-align: left; }
+}
