@@ -33,11 +33,15 @@ export function createScaleFeed() {
       const lf = pending.indexOf("\n");
       const cut = cr >= 0 && lf >= 0 ? Math.min(cr, lf) : Math.max(cr, lf);
       if (cut === -1) {
-        actions.push({ type: "text", text: pending });
+        const text = pending.replace(/[ \t]+$/g, "");
+        if (text) actions.push({ type: "text", text });
         pending = "";
         break;
       }
-      if (cut > 0) actions.push({ type: "text", text: pending.slice(0, cut) });
+      if (cut > 0) {
+        const text = pending.slice(0, cut).replace(/[ \t]+$/g, "");
+        if (text) actions.push({ type: "text", text });
+      }
       pending = pending.slice(cut);
       actions.push(...takeEnter());
     }
