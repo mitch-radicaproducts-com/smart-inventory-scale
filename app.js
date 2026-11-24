@@ -1,7 +1,7 @@
-import { buildReport, diagnosticPlan, reportFilename, runDiagnostic } from "./diagnostic.js?v=3";
-import { createStreamParser, interpretLine } from "./protocol.js?v=3";
+import { createStreamParser } from "./protocol.js?v=4";
 
 const statusEl = document.querySelector("#status");
+const printEl = document.querySelector("#print");
 const weightEl = document.querySelector("#weight");
 const piecesEl = document.querySelector("#pieces");
 const unitWeightEl = document.querySelector("#unit-weight");
@@ -14,17 +14,9 @@ const stopBitsEl = document.querySelector("#stop-bits");
 const connectBtn = document.querySelector("#connect");
 const reconnectBtn = document.querySelector("#reconnect");
 const disconnectBtn = document.querySelector("#disconnect");
-const commandForm = document.querySelector("#command-form");
-const commandEl = document.querySelector("#command");
-const endLineEl = document.querySelector("#end-line");
-const sendBtn = document.querySelector("#send");
-const sampleBtn = document.querySelector("#sample");
-const clearBtn = document.querySelector("#clear");
-const diagnoseBtn = document.querySelector("#diagnose");
-const downloadDiagnosticBtn = document.querySelector("#download-diagnostic");
-const diagnosticProgress = document.querySelector("#diagnostic-progress");
 
 const reading = {
+  printText: null,
   weightText: null,
   piecesText: null,
   unitWeightText: null,
@@ -33,24 +25,19 @@ const reading = {
 };
 
 const parser = createStreamParser();
-const sampleLines = ["ST, 12.500 kg", "U.W. 25.000 g", "PCS 500 pcs"];
 const maxLogLines = 200;
 
 let port = null;
 let reader = null;
-let writer = null;
 let readingPort = false;
 let readGeneration = 0;
-let sampleTimers = [];
-let diagnosticBucket = null;
-let diagnosticRunning = false;
-let diagnosticReport = null;
 
 function setStatus(text) {
   statusEl.textContent = text;
 }
 
 function render() {
+  printEl.textContent = reading.printText ?? "—";
   weightEl.textContent = reading.overload ? "OVER" : reading.weightText ?? "—";
   piecesEl.textContent = reading.piecesText ?? "—";
   unitWeightEl.textContent = reading.unitWeightText ?? "—";
@@ -70,6 +57,7 @@ function appendLog(text, kind) {
 function applyInterpreted(parsed) {
   if (!parsed) return;
   appendLog(parsed.raw);
+  reading.printText = parsed.raw;
   if (parsed.overload) reading.overload = true;
   if (parsed.weightText) {
     reading.weightText = parsed.weightText;
@@ -82,18 +70,26 @@ function applyInterpreted(parsed) {
 }
 
 function ingestText(text) {
-  for (const parsed of parser.push(text)) applyInterpreted(parsed);
+  const parsed = parser.push(text);
+  if (parsed.length === 0 && text.trim()) {
+    const pending = text.replace(/\s+/g, " ").trim();
+    reading.printText = pending;
+    appendLog(pending);
+    render();
+    return;
+  }
+  for (const line of parsed) applyInterpreted(line);
 }
 
 function ingestBytes(bytes) {
   const copy = new Uint8Array(bytes);
-  if (diagnosticBucket) diagnosticBucket.push(copy);
-  if (diagnosticRunning) return;
   const noisy = [...copy].filter((byte) => byte < 9 || (byte > 13 && byte < 32) || byte > 126).length;
   if (copy.length && noisy / copy.length > 0.4) {
     const hex = [...copy].map((byte) => byte.toString(16).padStart(2, "0")).join(" ");
+    reading.printText = hex;
     appendLog(hex, "note");
     setStatus("Received bytes that are not text. Match baud, data bits, and parity to the scale.");
+    render();
     return;
   }
   ingestText(new TextDecoder().decode(copy));
@@ -102,14 +98,6 @@ function ingestBytes(bytes) {
 function setConnected(connected) {
   connectBtn.disabled = connected;
   disconnectBtn.disabled = !connected;
-  sendBtn.disabled = !connected || diagnosticRunning;
-  diagnoseBtn.disabled = diagnosticRunning;
-  diagnoseBtn.classList.toggle("is-ready", connected && !diagnosticRunning);
-  if (!diagnosticReport) {
-    diagnosticProgress.textContent = connected
-      ? "Port open. Run diagnostic is ready."
-      : "Connect the adapter, then choose Run diagnostic.";
-  }
   baudEl.disabled = connected;
   dataBitsEl.disabled = connected;
   parityEl.disabled = connected;
@@ -131,8 +119,7 @@ async function readLoop(generation) {
   try {
     while (readingPort && reader && generation === readGeneration) {
       const { value, done } = await reader.read();
-      if (generation !== readGeneration) break;
-      if (done) break;
+      if (generation !== readGeneration || done) break;
       if (value) ingestBytes(value);
     }
   } catch (error) {
@@ -146,43 +133,24 @@ async function stopReading() {
   readGeneration += 1;
   readingPort = false;
   const currentReader = reader;
-  const currentWriter = writer;
   reader = null;
-  writer = null;
-  if (currentReader) {
-    try {
-      await currentReader.cancel();
-    } catch (error) {
-      appendLog(error.message || "The reader was already closed.", "note");
-    }
-    try {
-      currentReader.releaseLock();
-    } catch (error) {
-      appendLog(error.message || "The reader lock was already released.", "note");
-    }
+  if (!currentReader) return;
+  try {
+    await currentReader.cancel();
+  } catch (error) {
+    appendLog(error.message || "The reader was already closed.", "note");
   }
-  if (currentWriter) {
-    try {
-      currentWriter.releaseLock();
-    } catch (error) {
-      appendLog(error.message || "The writer lock was already released.", "note");
-    }
+  try {
+    currentReader.releaseLock();
+  } catch (error) {
+    appendLog(error.message || "The reader lock was already released.", "note");
   }
 }
 
 function startReading() {
   readGeneration += 1;
   reader = port.readable.getReader();
-  writer = port.writable.getWriter();
   readLoop(readGeneration);
-}
-
-async function setPortOptions(options) {
-  await stopReading();
-  await port.close();
-  await port.open({ ...options, flowControl: "none" });
-  startReading();
-  await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
 async function openPort(nextPort) {
@@ -190,22 +158,22 @@ async function openPort(nextPort) {
   port = nextPort;
   setConnected(true);
   const options = serialOptions();
-  setStatus(`Connected at ${options.baudRate} baud, ${options.dataBits}${options.parity === "none" ? "N" : options.parity[0].toUpperCase()}${options.stopBits}. Press P on the scale, or send R.`);
+  const parity = options.parity === "none" ? "N" : options.parity[0].toUpperCase();
+  setStatus(`Listening at ${options.baudRate} baud, ${options.dataBits}${parity}${options.stopBits}. Press P on the scale.`);
   startReading();
 }
 
 async function connectNewPort() {
   if (!("serial" in navigator)) {
-    setStatus("This browser has no Web Serial port. Open the page in Chrome on the Chromebook.");
+    setStatus("This browser has no Web Serial port. Open the page in Chrome.");
     return;
   }
   if (!window.isSecureContext) {
-    setStatus("Open this page at http://localhost or on https. The serial port stays blocked on other addresses.");
+    setStatus("Open this page on https. The serial port stays blocked on other addresses.");
     return;
   }
   try {
-    const nextPort = await navigator.serial.requestPort();
-    await openPort(nextPort);
+    await openPort(await navigator.serial.requestPort());
   } catch (error) {
     if (error.name === "NotFoundError") setStatus("No serial port was selected.");
     else setStatus(error.message || "Could not open the serial port.");
@@ -214,20 +182,18 @@ async function connectNewPort() {
 
 async function reconnectGrantedPort() {
   const ports = await navigator.serial.getPorts();
-  const nextPort = ports[0];
-  if (!nextPort) {
+  if (!ports[0]) {
     setStatus("Chrome has not been allowed to use an adapter yet. Use Connect.");
     return;
   }
   try {
-    await openPort(nextPort);
+    await openPort(ports[0]);
   } catch (error) {
     setStatus(error.message || "Could not reopen the adapter.");
   }
 }
 
 async function disconnect() {
-  diagnosticRunning = false;
   await stopReading();
   try {
     await port?.close();
@@ -239,123 +205,9 @@ async function disconnect() {
   setStatus("Not connected.");
 }
 
-function concatBytes(chunks) {
-  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
-  const merged = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return merged;
-}
-
-function downloadReport(report) {
-  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = reportFilename(new Date());
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-async function runHardwareDiagnostic() {
-  if (!writer || diagnosticRunning) {
-    setStatus("Connect the adapter first.");
-    return;
-  }
-  const original = serialOptions();
-  diagnosticRunning = true;
-  diagnosticReport = null;
-  downloadDiagnosticBtn.disabled = true;
-  setConnected(true);
-  const startedAt = new Date().toISOString();
-  try {
-    const trials = await runDiagnostic(diagnosticPlan(), {
-      signal: { get aborted() { return !diagnosticRunning || !port; } },
-      onProgress(current, total, step) {
-        const detail = step.port ? `${step.label}` : step.label;
-        diagnosticProgress.textContent = `${current} of ${total}: ${detail}`;
-        setStatus(`Diagnostic ${current} of ${total}`);
-      },
-      async write(text) {
-        if (!diagnosticBucket) diagnosticBucket = [];
-        await writer.write(new TextEncoder().encode(text));
-      },
-      async collect(waitMs) {
-        if (!diagnosticBucket) diagnosticBucket = [];
-        const mine = diagnosticBucket;
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        if (diagnosticBucket === mine) diagnosticBucket = null;
-        return concatBytes(mine);
-      },
-      async setPort(options) {
-        await setPortOptions(options);
-      },
-    });
-    const report = buildReport({ startedAt, port: original, trials });
-    diagnosticReport = report;
-    downloadDiagnosticBtn.disabled = false;
-    try {
-      await setPortOptions(original);
-    } catch (restoreError) {
-      appendLog(restoreError.message || "The original port settings were not restored.", "note");
-    }
-    downloadReport(report);
-    const summary = `Diagnostic finished. ${report.replyCount} of ${report.trialCount} probes returned bytes. Choose Download log if the file did not save on its own.`;
-    diagnosticProgress.textContent = summary;
-    setStatus(summary);
-    appendLog(summary, "note");
-  } catch (error) {
-    setStatus(error.message || "The diagnostic stopped.");
-    try {
-      if (port) await setPortOptions(original);
-    } catch (restoreError) {
-      appendLog(restoreError.message || "The original port settings were not restored.", "note");
-    }
-  } finally {
-    diagnosticBucket = null;
-    diagnosticRunning = false;
-    if (port) setConnected(true);
-  }
-}
-
-async function sendCommand(event) {
-  event.preventDefault();
-  if (!writer) {
-    setStatus("Connect the adapter first.");
-    return;
-  }
-  let payload = commandEl.value;
-  if (endLineEl.checked && !payload.endsWith("\n")) payload += "\r\n";
-  try {
-    await writer.write(new TextEncoder().encode(payload));
-    appendLog(`Sent ${JSON.stringify(payload)}`, "note");
-  } catch (error) {
-    setStatus(error.message || "Could not send the command.");
-  }
-}
-
-function clearSampleTimers() {
-  for (const timer of sampleTimers) clearTimeout(timer);
-  sampleTimers = [];
-}
-
-function showSample() {
-  clearSampleTimers();
-  appendLog("Sample lines, not from the scale.", "note");
-  sampleLines.forEach((line, index) => {
-    const timer = setTimeout(() => {
-      applyInterpreted(interpretLine(line));
-    }, 400 * (index + 1));
-    sampleTimers.push(timer);
-  });
-}
-
 function clearBench() {
-  clearSampleTimers();
   parser.reset();
+  reading.printText = null;
   reading.weightText = null;
   reading.piecesText = null;
   reading.unitWeightText = null;
@@ -374,22 +226,12 @@ reconnectBtn.addEventListener("click", () => {
 disconnectBtn.addEventListener("click", () => {
   disconnect();
 });
-commandForm.addEventListener("submit", (event) => {
-  sendCommand(event);
-});
-sampleBtn.addEventListener("click", showSample);
-clearBtn.addEventListener("click", clearBench);
-diagnoseBtn.addEventListener("click", () => {
-  runHardwareDiagnostic();
-});
-downloadDiagnosticBtn.addEventListener("click", () => {
-  if (diagnosticReport) downloadReport(diagnosticReport);
-});
+document.querySelector("#clear").addEventListener("click", clearBench);
 
 if (!("serial" in navigator)) {
-  setStatus("This browser has no Web Serial port. Open the page in Chrome on the Chromebook.");
+  setStatus("This browser has no Web Serial port. Open the page in Chrome.");
 } else if (!window.isSecureContext) {
-  setStatus("Open this page at http://localhost or on https. The serial port stays blocked on other addresses.");
+  setStatus("Open this page on https. The serial port stays blocked on other addresses.");
 } else {
   navigator.serial.getPorts().then((ports) => {
     reconnectBtn.hidden = ports.length === 0;
