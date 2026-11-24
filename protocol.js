@@ -1,6 +1,5 @@
-// The SEAKS3011D manual documents baud and print mode, not the ASCII
-// print string. These helpers only recognize a line that names a weight,
-// a piece count, or a unit weight. Everything else stays raw.
+// A print fills a card only when the line itself names that value.
+// A bare number stays raw. This scale does not send a separate unit.
 
 export function interpretLine(line) {
   const raw = String(line).replace(/\s+/g, " ").trim();

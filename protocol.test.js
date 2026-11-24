@@ -51,6 +51,13 @@ test("keeps unrecognized text raw", () => {
   assert.equal(parsed.unitWeightText, null);
 });
 
+test("a bare number does not get a unit", () => {
+  const parsed = interpretLine("12.500");
+  assert.equal(parsed.raw, "12.500");
+  assert.equal(parsed.weightText, null);
+  assert.equal(parsed.unitWeightText, null);
+});
+
 test("splits CR LF frames and holds a partial line", () => {
   const parser = createStreamParser();
   assert.deepEqual(
@@ -74,9 +81,10 @@ test("drops blank lines and resets a partial frame", () => {
 
 test("the page exposes the serial controls", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-  for (const id of ["connect", "disconnect", "send", "sample", "clear", "weight", "pieces", "unit-weight", "log", "baud"]) {
+  for (const id of ["connect", "disconnect", "clear", "print", "weight", "pieces", "unit-weight", "log", "baud"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  assert.match(html, /app\.js/);
-  assert.match(html, /styles\.css/);
+  assert.doesNotMatch(html, /id="diagnose"/);
+  assert.doesNotMatch(html, /id="send"/);
+  assert.match(html, /app\.js\?v=4/);
 });

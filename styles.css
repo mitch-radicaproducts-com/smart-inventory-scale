@@ -49,8 +49,6 @@ h2 {
   font-size: 1rem;
 }
 
-.subhead { margin-top: 1.25rem; }
-
 .status {
   margin: 0;
   max-width: 28rem;
@@ -65,7 +63,7 @@ main {
   padding: 1rem 1.5rem 2rem;
 }
 
-.bench, .log-panel {
+.bench, .log-panel, .print-card {
   grid-column: 1 / -1;
 }
 
@@ -172,24 +170,16 @@ button {
   cursor: pointer;
 }
 
-#disconnect, #sample, #clear, #reconnect, #download-diagnostic, #diagnose {
+#disconnect, #clear, #reconnect {
   background: transparent;
   border-color: var(--line);
   color: var(--ink);
 }
 
-#diagnose.is-ready {
-  background: var(--teal);
-  border-color: transparent;
-  color: var(--teal-ink);
-}
-
 button:disabled,
 #disconnect:disabled,
 #reconnect:disabled,
-#sample:disabled,
-#clear:disabled,
-#download-diagnostic:disabled {
+#clear:disabled {
   background: #e6e0d4;
   border-color: transparent;
   color: #8a8376;

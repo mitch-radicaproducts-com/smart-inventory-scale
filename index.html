@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SEAKS3011D scale</title>
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <header class="top">
@@ -16,7 +16,11 @@
   </header>
 
   <main>
-    <section class="bench" aria-label="Live reading">
+    <section class="bench" aria-label="Latest print">
+      <article class="readout print-card">
+        <p class="label">Last print</p>
+        <p id="print" class="value">—</p>
+      </article>
       <article class="readout">
         <p class="label">Weight <span id="stability" class="pill"></span></p>
         <p id="weight" class="value">—</p>
@@ -33,6 +37,7 @@
 
     <section class="panel controls">
       <h2>Connection</h2>
+      <p class="note">Chrome has to open the USB serial adapter itself. A barcode scanner types because it pretends to be a keyboard. This scale does not.</p>
       <div class="fields">
         <label>Baud
           <select id="baud">
@@ -67,46 +72,25 @@
         <button id="connect" type="button">Connect</button>
         <button id="reconnect" type="button" hidden>Reconnect</button>
         <button id="disconnect" type="button" disabled>Disconnect</button>
-      </div>
-      <form id="command-form" class="command">
-        <label class="grow">Command
-          <input id="command" name="command" value="R" autocomplete="off" spellcheck="false">
-        </label>
-        <label class="check">
-          <input id="end-line" type="checkbox" checked>
-          End with Enter
-        </label>
-        <button id="send" type="submit" disabled>Send</button>
-      </form>
-      <div class="actions">
-        <button id="sample" type="button">Show sample lines</button>
         <button id="clear" type="button">Clear</button>
       </div>
-      <h2 class="subhead">Hardware diagnostic</h2>
-      <p class="note">Connect the adapter and put a weight on the pan. The run listens, sends each printable character, and sends the usual read commands. It takes about two minutes. It does not send the 7 8 9 setup menu or a calibration command. Letters such as T and Z may tare or zero the scale. Download the file when it finishes and send that file back.</p>
-      <div class="actions">
-        <button id="diagnose" type="button">Run diagnostic</button>
-        <button id="download-diagnostic" type="button" disabled>Download log</button>
-      </div>
-      <p id="diagnostic-progress" class="note">Connect the adapter, then choose Run diagnostic.</p>
     </section>
 
     <section class="panel setup">
-      <h2>RS-232 on this model</h2>
+      <h2>How this scale sends</h2>
       <ol>
-        <li>Use a USB-to-RS232 adapter, preferably FTDI, and a straight DB9 cable. Pin 2, pin 3, and pin 5 carry transmit, receive, and ground. The counting-scale manual does not draw the connector. The same seller’s other balances transmit on pin 2 and receive on pin 3.</li>
-        <li>On the scale, press 7, 8, 9. The display cycles to <kbd>diu</kbd>. Press PCS/SET until <kbd>bud</kbd>, choose 9600, then press Alarm. Press PCS/SET until <kbd>odE</kbd>, press Alarm, then choose the output mode and press Alarm again. Turn the scale off and on.</li>
-        <li>Output mode 1 sends when you press P. Mode 2 sends once the weight is stable. Mode 3 sends continuously.</li>
-        <li>Open this page in Chrome on the Chromebook at <kbd>http://localhost</kbd> or an https address. Choose the USB serial port. The family default is 9600 baud, 8 data bits, no parity, 1 stop bit.</li>
+        <li>Connect a USB-to-RS232 adapter. The scale transmits on pin 2, receives on pin 3, and uses pin 5 for ground. This model’s manual does not draw the plug. Those pins are from the same seller’s other balances.</li>
+        <li>On the scale, press 7, 8, 9 until <kbd>diu</kbd>, then PCS/SET until <kbd>bud</kbd>. Confirm 9600 with Alarm. PCS/SET to <kbd>odE</kbd>, then Alarm. Choose 1, 2, or 3 and press Alarm. Turn the scale off and on.</li>
+        <li>Mode 1 sends when you press P. Mode 2 sends when the weight settles. Mode 3 keeps sending. The page only listens. Writing a command does not request a reading.</li>
       </ol>
-      <p class="note">The manual’s terminal steps say to enter R, and they name a CAL/PCS key that this model does not have. The print key here is P. Send writes R, the request documented on the related HC balances, plus a carriage return when End with Enter is checked. The manual does not publish the print text, so every received line stays in the log. The cards fill in when a line names a weight, a piece count, or a unit weight.</p>
+      <p class="note">The manual does not show a sample print. Last print is the text that arrived. Weight, pieces, and unit weight fill in only when that text names them. A bare number does not get a unit added.</p>
     </section>
 
     <section class="panel log-panel">
-      <h2>Raw serial</h2>
+      <h2>Received text</h2>
       <ol id="log" class="log" aria-live="polite"></ol>
     </section>
   </main>
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
