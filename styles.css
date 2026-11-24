@@ -49,6 +49,8 @@ h2 {
   font-size: 1rem;
 }
 
+.subhead { margin-top: 1.25rem; }
+
 .status {
   margin: 0;
   max-width: 28rem;
@@ -170,7 +172,7 @@ button {
   cursor: pointer;
 }
 
-#disconnect, #sample, #clear, #reconnect {
+#disconnect, #sample, #clear, #reconnect, #download-diagnostic {
   background: transparent;
   border-color: var(--line);
   color: var(--ink);
@@ -180,7 +182,8 @@ button:disabled,
 #disconnect:disabled,
 #reconnect:disabled,
 #sample:disabled,
-#clear:disabled {
+#clear:disabled,
+#download-diagnostic:disabled {
   background: #e6e0d4;
   border-color: transparent;
   color: #8a8376;

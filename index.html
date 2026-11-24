@@ -82,6 +82,13 @@
         <button id="sample" type="button">Show sample lines</button>
         <button id="clear" type="button">Clear</button>
       </div>
+      <h2 class="subhead">Hardware diagnostic</h2>
+      <p class="note">Connect the adapter and put a weight on the pan. The run listens, sends each printable character, and sends the usual read commands. It takes about two minutes. It does not send the 7 8 9 setup menu or a calibration command. Letters such as T and Z may tare or zero the scale. Download the file when it finishes and send that file back.</p>
+      <div class="actions">
+        <button id="diagnose" type="button" disabled>Run diagnostic</button>
+        <button id="download-diagnostic" type="button" disabled>Download log</button>
+      </div>
+      <p id="diagnostic-progress" class="note"></p>
     </section>
 
     <section class="panel setup">
