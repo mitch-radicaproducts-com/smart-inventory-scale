@@ -74,7 +74,7 @@
     "z-index:2147483647",
     "display:grid",
     "gap:6px",
-    "padding:8px",
+    "padding:10px 12px",
     "border:1px solid #1c1914",
     "border-radius:10px",
     "background:#fffdf8",
@@ -114,7 +114,7 @@
 
   function addChoice(name, label, checked) {
     const row = document.createElement("label");
-    row.style.cssText = "display:flex;gap:6px;align-items:center;cursor:pointer;";
+    row.style.cssText = "display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;";
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = checked;
