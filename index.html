@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SEAKS3011D scale</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <header class="top">
@@ -85,10 +85,10 @@
       <h2 class="subhead">Hardware diagnostic</h2>
       <p class="note">Connect the adapter and put a weight on the pan. The run listens, sends each printable character, and sends the usual read commands. It takes about two minutes. It does not send the 7 8 9 setup menu or a calibration command. Letters such as T and Z may tare or zero the scale. Download the file when it finishes and send that file back.</p>
       <div class="actions">
-        <button id="diagnose" type="button" disabled>Run diagnostic</button>
+        <button id="diagnose" type="button">Run diagnostic</button>
         <button id="download-diagnostic" type="button" disabled>Download log</button>
       </div>
-      <p id="diagnostic-progress" class="note"></p>
+      <p id="diagnostic-progress" class="note">Connect the adapter, then choose Run diagnostic.</p>
     </section>
 
     <section class="panel setup">
@@ -107,6 +107,6 @@
       <ol id="log" class="log" aria-live="polite"></ol>
     </section>
   </main>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

@@ -172,10 +172,16 @@ button {
   cursor: pointer;
 }
 
-#disconnect, #sample, #clear, #reconnect, #download-diagnostic {
+#disconnect, #sample, #clear, #reconnect, #download-diagnostic, #diagnose {
   background: transparent;
   border-color: var(--line);
   color: var(--ink);
+}
+
+#diagnose.is-ready {
+  background: var(--teal);
+  border-color: transparent;
+  color: var(--teal-ink);
 }
 
 button:disabled,

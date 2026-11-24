@@ -1,5 +1,5 @@
-import { buildReport, diagnosticPlan, reportFilename, runDiagnostic } from "./diagnostic.js";
-import { createStreamParser, interpretLine } from "./protocol.js";
+import { buildReport, diagnosticPlan, reportFilename, runDiagnostic } from "./diagnostic.js?v=3";
+import { createStreamParser, interpretLine } from "./protocol.js?v=3";
 
 const statusEl = document.querySelector("#status");
 const weightEl = document.querySelector("#weight");
@@ -103,7 +103,13 @@ function setConnected(connected) {
   connectBtn.disabled = connected;
   disconnectBtn.disabled = !connected;
   sendBtn.disabled = !connected || diagnosticRunning;
-  diagnoseBtn.disabled = !connected || diagnosticRunning;
+  diagnoseBtn.disabled = diagnosticRunning;
+  diagnoseBtn.classList.toggle("is-ready", connected && !diagnosticRunning);
+  if (!diagnosticReport) {
+    diagnosticProgress.textContent = connected
+      ? "Port open. Run diagnostic is ready."
+      : "Connect the adapter, then choose Run diagnostic.";
+  }
   baudEl.disabled = connected;
   dataBitsEl.disabled = connected;
   parityEl.disabled = connected;
