@@ -23,3 +23,9 @@ The counting-scale manual documents a receiver, not a command set.
 - The manual names the baud rate and leaves data bits, parity, and stop bits unstated. The page defaults to 8 data bits, no parity, and 1 stop bit.
 
 A probe of every printable character and the usual read commands returned no bytes. The manual does not publish the print text. The page shows that text as it arrives and fills weight, pieces, or unit weight only when the text names them.
+
+## Tampermonkey
+
+`scale.user.js` types each print into the focused field, then sends Enter when the scale sends a carriage return. Install it in Tampermonkey on Chrome. Open an https page, click **Connect scale**, choose the USB serial adapter, click the field you want, and press P on the scale.
+
+The permission belongs to that website. Connecting on one site does not cover another. The script runs on the top-level Chrome tab. It does not run inside an Airtable custom-extension frame. Firefox has no Web Serial API, so the script does nothing there.
