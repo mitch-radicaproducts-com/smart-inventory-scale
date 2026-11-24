@@ -83,6 +83,8 @@ test("the report file name is sortable", () => {
 test("the page exposes the diagnostic controls", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   assert.match(html, /id="diagnose"/);
+  assert.doesNotMatch(html, /id="diagnose"[^>]*disabled/);
+  assert.match(html, /app\.js\?v=3/);
   assert.match(html, /id="download-diagnostic"/);
   assert.match(html, /id="diagnostic-progress"/);
 });
