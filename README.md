@@ -25,3 +25,7 @@ The Fristaden Lab counting-scale manual (the SEAKS3011D / HCS3011D family) docum
 - The same seller’s browser logger and HC-series notes use 8 data bits, no parity, and 1 stop bit. The counting-scale manual names the baud rate and leaves the other parameters unstated, so the page defaults to 8N1 and can switch.
 
 The manual does not publish the print string. The page keeps every received line and fills the weight, piece, and unit-weight cards when a line names one of those values.
+
+## Hardware diagnostic
+
+Connect the adapter, put a weight on the pan, and choose Run diagnostic. The page writes a JSON file of every command it sent and every byte that came back. Send that file back so the print text and command set can be matched to this scale.

@@ -1,3 +1,4 @@
+import { buildReport, diagnosticPlan, reportFilename, runDiagnostic } from "./diagnostic.js";
 import { createStreamParser, interpretLine } from "./protocol.js";
 
 const statusEl = document.querySelector("#status");
@@ -19,6 +20,9 @@ const endLineEl = document.querySelector("#end-line");
 const sendBtn = document.querySelector("#send");
 const sampleBtn = document.querySelector("#sample");
 const clearBtn = document.querySelector("#clear");
+const diagnoseBtn = document.querySelector("#diagnose");
+const downloadDiagnosticBtn = document.querySelector("#download-diagnostic");
+const diagnosticProgress = document.querySelector("#diagnostic-progress");
 
 const reading = {
   weightText: null,
@@ -36,7 +40,11 @@ let port = null;
 let reader = null;
 let writer = null;
 let readingPort = false;
+let readGeneration = 0;
 let sampleTimers = [];
+let diagnosticBucket = null;
+let diagnosticRunning = false;
+let diagnosticReport = null;
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -78,20 +86,24 @@ function ingestText(text) {
 }
 
 function ingestBytes(bytes) {
-  const noisy = [...bytes].filter((byte) => byte < 9 || (byte > 13 && byte < 32) || byte > 126).length;
-  if (bytes.length && noisy / bytes.length > 0.4) {
-    const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join(" ");
+  const copy = new Uint8Array(bytes);
+  if (diagnosticBucket) diagnosticBucket.push(copy);
+  if (diagnosticRunning) return;
+  const noisy = [...copy].filter((byte) => byte < 9 || (byte > 13 && byte < 32) || byte > 126).length;
+  if (copy.length && noisy / copy.length > 0.4) {
+    const hex = [...copy].map((byte) => byte.toString(16).padStart(2, "0")).join(" ");
     appendLog(hex, "note");
     setStatus("Received bytes that are not text. Match baud, data bits, and parity to the scale.");
     return;
   }
-  ingestText(new TextDecoder().decode(bytes));
+  ingestText(new TextDecoder().decode(copy));
 }
 
 function setConnected(connected) {
   connectBtn.disabled = connected;
   disconnectBtn.disabled = !connected;
-  sendBtn.disabled = !connected;
+  sendBtn.disabled = !connected || diagnosticRunning;
+  diagnoseBtn.disabled = !connected || diagnosticRunning;
   baudEl.disabled = connected;
   dataBitsEl.disabled = connected;
   parityEl.disabled = connected;
@@ -108,30 +120,72 @@ function serialOptions() {
   };
 }
 
-async function readLoop() {
+async function readLoop(generation) {
   readingPort = true;
   try {
-    while (readingPort && reader) {
+    while (readingPort && reader && generation === readGeneration) {
       const { value, done } = await reader.read();
+      if (generation !== readGeneration) break;
       if (done) break;
       if (value) ingestBytes(value);
     }
   } catch (error) {
-    if (readingPort) setStatus(error.message || "The serial read stopped.");
+    if (generation === readGeneration && readingPort) setStatus(error.message || "The serial read stopped.");
   } finally {
-    readingPort = false;
+    if (generation === readGeneration) readingPort = false;
   }
+}
+
+async function stopReading() {
+  readGeneration += 1;
+  readingPort = false;
+  const currentReader = reader;
+  const currentWriter = writer;
+  reader = null;
+  writer = null;
+  if (currentReader) {
+    try {
+      await currentReader.cancel();
+    } catch (error) {
+      appendLog(error.message || "The reader was already closed.", "note");
+    }
+    try {
+      currentReader.releaseLock();
+    } catch (error) {
+      appendLog(error.message || "The reader lock was already released.", "note");
+    }
+  }
+  if (currentWriter) {
+    try {
+      currentWriter.releaseLock();
+    } catch (error) {
+      appendLog(error.message || "The writer lock was already released.", "note");
+    }
+  }
+}
+
+function startReading() {
+  readGeneration += 1;
+  reader = port.readable.getReader();
+  writer = port.writable.getWriter();
+  readLoop(readGeneration);
+}
+
+async function setPortOptions(options) {
+  await stopReading();
+  await port.close();
+  await port.open({ ...options, flowControl: "none" });
+  startReading();
+  await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
 async function openPort(nextPort) {
   await nextPort.open(serialOptions());
   port = nextPort;
-  reader = port.readable.getReader();
-  writer = port.writable.getWriter();
   setConnected(true);
   const options = serialOptions();
   setStatus(`Connected at ${options.baudRate} baud, ${options.dataBits}${options.parity === "none" ? "N" : options.parity[0].toUpperCase()}${options.stopBits}. Press P on the scale, or send R.`);
-  readLoop();
+  startReading();
 }
 
 async function connectNewPort() {
@@ -167,24 +221,98 @@ async function reconnectGrantedPort() {
 }
 
 async function disconnect() {
-  readingPort = false;
+  diagnosticRunning = false;
+  await stopReading();
   try {
-    if (reader) await reader.cancel();
-  } catch (error) {
-    appendLog(error.message || "The reader was already closed.", "note");
-  }
-  try {
-    reader?.releaseLock();
-    writer?.releaseLock();
     await port?.close();
   } catch (error) {
     appendLog(error.message || "The port was already closed.", "note");
   }
   port = null;
-  reader = null;
-  writer = null;
   setConnected(false);
   setStatus("Not connected.");
+}
+
+function concatBytes(chunks) {
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const merged = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+
+function downloadReport(report) {
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = reportFilename(new Date());
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function runHardwareDiagnostic() {
+  if (!writer || diagnosticRunning) {
+    setStatus("Connect the adapter first.");
+    return;
+  }
+  const original = serialOptions();
+  diagnosticRunning = true;
+  diagnosticReport = null;
+  downloadDiagnosticBtn.disabled = true;
+  setConnected(true);
+  const startedAt = new Date().toISOString();
+  try {
+    const trials = await runDiagnostic(diagnosticPlan(), {
+      signal: { get aborted() { return !diagnosticRunning || !port; } },
+      onProgress(current, total, step) {
+        const detail = step.port ? `${step.label}` : step.label;
+        diagnosticProgress.textContent = `${current} of ${total}: ${detail}`;
+        setStatus(`Diagnostic ${current} of ${total}`);
+      },
+      async write(text) {
+        if (!diagnosticBucket) diagnosticBucket = [];
+        await writer.write(new TextEncoder().encode(text));
+      },
+      async collect(waitMs) {
+        if (!diagnosticBucket) diagnosticBucket = [];
+        const mine = diagnosticBucket;
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        if (diagnosticBucket === mine) diagnosticBucket = null;
+        return concatBytes(mine);
+      },
+      async setPort(options) {
+        await setPortOptions(options);
+      },
+    });
+    const report = buildReport({ startedAt, port: original, trials });
+    diagnosticReport = report;
+    downloadDiagnosticBtn.disabled = false;
+    try {
+      await setPortOptions(original);
+    } catch (restoreError) {
+      appendLog(restoreError.message || "The original port settings were not restored.", "note");
+    }
+    downloadReport(report);
+    const summary = `Diagnostic finished. ${report.replyCount} of ${report.trialCount} probes returned bytes. Choose Download log if the file did not save on its own.`;
+    diagnosticProgress.textContent = summary;
+    setStatus(summary);
+    appendLog(summary, "note");
+  } catch (error) {
+    setStatus(error.message || "The diagnostic stopped.");
+    try {
+      if (port) await setPortOptions(original);
+    } catch (restoreError) {
+      appendLog(restoreError.message || "The original port settings were not restored.", "note");
+    }
+  } finally {
+    diagnosticBucket = null;
+    diagnosticRunning = false;
+    if (port) setConnected(true);
+  }
 }
 
 async function sendCommand(event) {
@@ -245,6 +373,12 @@ commandForm.addEventListener("submit", (event) => {
 });
 sampleBtn.addEventListener("click", showSample);
 clearBtn.addEventListener("click", clearBench);
+diagnoseBtn.addEventListener("click", () => {
+  runHardwareDiagnostic();
+});
+downloadDiagnosticBtn.addEventListener("click", () => {
+  if (diagnosticReport) downloadReport(diagnosticReport);
+});
 
 if (!("serial" in navigator)) {
   setStatus("This browser has no Web Serial port. Open the page in Chrome on the Chromebook.");
